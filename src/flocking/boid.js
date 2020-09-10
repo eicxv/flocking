@@ -13,19 +13,23 @@ export default class Boid {
           Math.random() - 0.5
         );
     this.maxVelocity = 1;
-    this.separationWeight = 1;
+    this.separationWeight = 2;
     this.alignmentWeight = 1;
-    this.cohesionWeight = 1;
+    this.cohesionWeight = 0.5;
 
     this.attentionDistance = 5;
-    this.attentionAngle = 0.5 * Math.PI;
+    this.attentionDistanceSquared = this.attentionDistance ** 2;
+    this.attentionAngle = 0.65 * Math.PI;
     this.cosAttentionAngle = Math.cos(this.attentionAngle);
+
+    this.dummyVector = new THREE.Vector3();
+    this.dummyVector2 = new THREE.Vector3();
   }
 
   steer(scene, boids, dt) {
     let boidsNearby = this._filterAttention(
       boids,
-      this.attentionDistance,
+      this.attentionDistanceSquared,
       this.cosAttentionAngle
     );
     if (boidsNearby.length !== 0) {
@@ -44,13 +48,11 @@ export default class Boid {
   }
 
   move(dt) {
-    this.position = this.position.add(this.velocity.clone().multiplyScalar(dt));
+    this.dummyVector.copy(this.velocity);
+    this.position.add(this.dummyVector.multiplyScalar(dt));
   }
 
   _updateVelocity(force, dt, weight = 1) {
-    if (isNaN(force.x)) {
-      throw new Error("HELP");
-    }
     this.velocity.add(force.multiplyScalar(dt * weight));
   }
 
@@ -78,9 +80,10 @@ export default class Boid {
   _separation(boids) {
     let separationForce = new THREE.Vector3();
     boids.forEach((boid) => {
-      let dist = boid.position.distanceTo(this.position);
-      let dir = this.position.clone().sub(boid.position);
-      dir.divideScalar(dist ** 2);
+      let distanceSquared = boid.position.distanceToSquared(this.position);
+      this.dummyVector.copy(this.position);
+      let dir = this.dummyVector.sub(boid.position);
+      dir.divideScalar(distanceSquared ** 2);
       separationForce.add(dir);
     });
     separationForce.divideScalar(boids.length);
@@ -95,7 +98,6 @@ export default class Boid {
     if (intersects.length === 0) {
       return;
     }
-    let distance = intersects[0].distance;
 
     let directionIt = this._generateDirections();
     for (let direction of directionIt) {
@@ -109,28 +111,35 @@ export default class Boid {
     }
   }
 
-  _filterAttention(boids, distance, maxCosAngle) {
-    let filterFunc = this._isInAttention.bind(this, distance, maxCosAngle);
+  _filterAttention(boids, distanceSquared, maxCosAngle) {
+    let filterFunc = this._isInAttention.bind(
+      this,
+      distanceSquared,
+      maxCosAngle
+    );
     return boids.filter(filterFunc);
   }
 
-  _isInAttention(distance, maxCosAngle, boid) {
+  _isInAttention(distanceSquared, maxCosAngle, boid) {
     if (boid === this) {
       return false;
     }
-    if (boid.position.distanceTo(this.position) > distance) {
+    if (boid.position.distanceToSquared(this.position) > distanceSquared) {
       return false;
     }
-    let vectorToBoid = boid.position.clone().sub(this.position);
+    this.dummyVector.copy(boid.position);
+    let vectorToBoid = this.dummyVector.sub(this.position);
     vectorToBoid.normalize();
-    let cosAngle = vectorToBoid.dot(this.velocity.clone().normalize());
+    this.dummyVector2.copy(this.velocity);
+    this.dummyVector2.normalize();
+    let cosAngle = vectorToBoid.dot(this.dummyVector2);
     return cosAngle > maxCosAngle;
   }
 
   *_generateDirections() {
     let phiSteps = 4;
     let phiStepSize = (2 * Math.PI) / phiSteps;
-    let thetaSteps = 10;
+    let thetaSteps = 6;
     let thetaStepSize = Math.PI / thetaSteps;
 
     let nullVector = new THREE.Vector3(0, 0, 0);
