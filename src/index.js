@@ -5,7 +5,7 @@ import Viewport from "./viewport/viewport";
 import "./styles.css";
 
 let dt = 0.1;
-let numberBoids = 50;
+let numberBoids = 500;
 
 function main() {
   const container = document.getElementById("viewport");

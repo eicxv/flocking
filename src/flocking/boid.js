@@ -4,7 +4,11 @@ export default class Boid {
   constructor(position, velocity) {
     this.position = position
       ? position
-      : new THREE.Vector3(Math.random(), Math.random(), Math.random());
+      : new THREE.Vector3(
+          Math.random() - 0.5,
+          Math.random() - 0.5,
+          Math.random() - 0.5
+        );
     this.velocity = velocity
       ? velocity
       : new THREE.Vector3(
@@ -17,7 +21,7 @@ export default class Boid {
     this.alignmentWeight = 1;
     this.cohesionWeight = 0.5;
 
-    this.attentionDistance = 5;
+    this.attentionDistance = 2;
     this.attentionDistanceSquared = this.attentionDistance ** 2;
     this.attentionAngle = 0.65 * Math.PI;
     this.cosAttentionAngle = Math.cos(this.attentionAngle);
@@ -26,12 +30,17 @@ export default class Boid {
     this.dummyVector2 = new THREE.Vector3();
   }
 
-  steer(scene, boids, dt) {
-    let boidsNearby = this._filterAttention(
-      boids,
+  steer(scene, boidsHashMap, dt, boids) {
+    let boidsNearby = boidsHashMap.retrieve(
+      this.position,
+      this.attentionDistance
+    );
+    boidsNearby = this._filterAttention(
+      boidsNearby,
       this.attentionDistanceSquared,
       this.cosAttentionAngle
     );
+
     if (boidsNearby.length !== 0) {
       let steerForce;
       steerForce = this._alignment(boidsNearby);
