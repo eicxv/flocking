@@ -36,6 +36,11 @@ export const boidParams = new BoidParams();
 const dummyVector = new THREE.Vector3();
 const dummyVector2 = new THREE.Vector3();
 
+const raycaster = new THREE.Raycaster();
+raycaster.near = 0;
+raycaster.far = boidParams.avoidObstacleDistance;
+raycaster.layers.set(1);
+
 export default class Boid {
   constructor(position, velocity) {
     this.position = position
@@ -52,7 +57,6 @@ export default class Boid {
           Math.random() - 0.5,
           Math.random() - 0.5
         );
-
     this.params = boidParams;
   }
 
@@ -130,13 +134,7 @@ export default class Boid {
   }
 
   _isOnCollisionCourse(scene, avoidDistance) {
-    let raycaster = new THREE.Raycaster(
-      this.position,
-      this.velocity,
-      0,
-      avoidDistance
-    );
-    raycaster.layers.set(1);
+    raycaster.set(this.position, this.velocity);
     let intersects = raycaster.intersectObjects(scene.children);
     return intersects.length !== 0;
   }
@@ -144,13 +142,7 @@ export default class Boid {
   _avoidObstacles(scene, avoidDistance) {
     let directionIt = this._generateDirections();
     for (let direction of directionIt) {
-      let raycaster = new THREE.Raycaster(
-        this.position,
-        direction,
-        0,
-        avoidDistance
-      );
-      raycaster.layers.set(1);
+      raycaster.set(this.position, direction);
       let intersects = raycaster.intersectObjects(scene.children);
       if (intersects.length === 0) {
         this.velocity = direction;
