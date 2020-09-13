@@ -12,7 +12,8 @@ export default class Flock {
       boids.length
     );
 
-    this.spatialHash = new SpatialHash(3, new THREE.Vector3(0, 0, 0), 10);
+    this.spatialHash = new SpatialHash(4, new THREE.Vector3(0, 0, 0), 10);
+    console.log(this.spatialHash._hash);
     this.boids.forEach((boid) => {
       this.spatialHash.insert(boid);
     });

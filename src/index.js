@@ -1,13 +1,14 @@
 import * as THREE from "three";
-// import Flock from "./flocking/flock";
 import { initFlock, addBoundary } from "./flocking/setup";
 import Viewport from "./viewport/viewport";
+import Gui from "./gui";
 import "./styles.css";
 
 let dt = 0.1;
-let numberBoids = 500;
+let numberBoids = 200;
 
 function main() {
+  let gui = new Gui();
   const container = document.getElementById("viewport");
   const viewport = new Viewport(container, true);
   const scene = viewport.getScene();
@@ -15,7 +16,9 @@ function main() {
   const flock = initFlock(numberBoids, scene, dt);
 
   function update() {
-    flock.update(dt);
+    if (gui.obj.run === true) {
+      flock.update(dt);
+    }
     viewport.render();
     requestAnimationFrame(update);
   }

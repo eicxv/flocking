@@ -1,5 +1,41 @@
 import * as THREE from "three";
 
+class BoidParams {
+  constructor() {
+    this.maxVelocity = 1;
+    this.separationWeight = 2;
+    this.alignmentWeight = 1;
+    this.cohesionWeight = 0.5;
+
+    this.attentionAngle = 0.65 * Math.PI;
+    this.attentionDistance = 2;
+    this.avoidObstacleDistance = 2;
+  }
+
+  set attentionDistance(distance) {
+    this._attentionDistance = distance;
+    this.attentionDistanceSquared = distance ** 2;
+  }
+
+  get attentionDistance() {
+    return this._attentionDistance;
+  }
+
+  set attentionAngle(angle) {
+    this._attentionAngle = angle;
+    this.cosAttentionAngle = Math.cos(this._attentionAngle);
+  }
+
+  get attentionAngle() {
+    return this._attentionAngle;
+  }
+}
+
+export const boidParams = new BoidParams();
+
+const dummyVector = new THREE.Vector3();
+const dummyVector2 = new THREE.Vector3();
+
 export default class Boid {
   constructor(position, velocity) {
     this.position = position
@@ -16,49 +52,42 @@ export default class Boid {
           Math.random() - 0.5,
           Math.random() - 0.5
         );
-    this.maxVelocity = 1;
-    this.separationWeight = 2;
-    this.alignmentWeight = 1;
-    this.cohesionWeight = 0.5;
 
-    this.attentionDistance = 2;
-    this.attentionDistanceSquared = this.attentionDistance ** 2;
-    this.attentionAngle = 0.65 * Math.PI;
-    this.cosAttentionAngle = Math.cos(this.attentionAngle);
-
-    this.dummyVector = new THREE.Vector3();
-    this.dummyVector2 = new THREE.Vector3();
+    this.params = boidParams;
   }
 
-  steer(scene, boidsHashMap, dt, boids) {
+  steer(scene, boidsHashMap, dt) {
     let boidsNearby = boidsHashMap.retrieve(
       this.position,
-      this.attentionDistance
+      this.params.attentionDistance
     );
     boidsNearby = this._filterAttention(
       boidsNearby,
-      this.attentionDistanceSquared,
-      this.cosAttentionAngle
+      this.params.attentionDistanceSquared,
+      this.params.cosAttentionAngle
     );
 
     if (boidsNearby.length !== 0) {
       let steerForce;
       steerForce = this._alignment(boidsNearby);
-      this._updateVelocity(steerForce, dt, this.alignmentWeight);
+      this._updateVelocity(steerForce, dt, this.params.alignmentWeight);
       steerForce = this._cohesion(boidsNearby);
-      this._updateVelocity(steerForce, dt, this.cohesionWeight);
+      this._updateVelocity(steerForce, dt, this.params.cohesionWeight);
       steerForce = this._separation(boidsNearby);
-      this._updateVelocity(steerForce, dt, this.separationWeight);
+      this._updateVelocity(steerForce, dt, this.params.separationWeight);
     }
 
-    this._avoidObstacles(scene);
+    if (this._isOnCollisionCourse(scene, this.params.avoidObstacleDistance)) {
+      this._avoidObstacles(scene, this.params.avoidObstacleDistance);
+    }
+
     this.velocity.normalize();
-    this.velocity.multiplyScalar(this.maxVelocity);
+    this.velocity.multiplyScalar(this.params.maxVelocity);
   }
 
   move(dt) {
-    this.dummyVector.copy(this.velocity);
-    this.position.add(this.dummyVector.multiplyScalar(dt));
+    let velocity = dummyVector.copy(this.velocity);
+    this.position.add(velocity.multiplyScalar(dt));
   }
 
   _updateVelocity(force, dt, weight = 1) {
@@ -90,8 +119,8 @@ export default class Boid {
     let separationForce = new THREE.Vector3();
     boids.forEach((boid) => {
       let distanceSquared = boid.position.distanceToSquared(this.position);
-      this.dummyVector.copy(this.position);
-      let dir = this.dummyVector.sub(boid.position);
+      let selfPosition = dummyVector.copy(this.position);
+      let dir = selfPosition.sub(boid.position);
       dir.divideScalar(distanceSquared ** 2);
       separationForce.add(dir);
     });
@@ -100,17 +129,27 @@ export default class Boid {
     return separationForce;
   }
 
-  _avoidObstacles(scene) {
-    let raycaster = new THREE.Raycaster(this.position, this.velocity, 0, 3);
+  _isOnCollisionCourse(scene, avoidDistance) {
+    let raycaster = new THREE.Raycaster(
+      this.position,
+      this.velocity,
+      0,
+      avoidDistance
+    );
     raycaster.layers.set(1);
     let intersects = raycaster.intersectObjects(scene.children);
-    if (intersects.length === 0) {
-      return;
-    }
+    return intersects.length !== 0;
+  }
 
+  _avoidObstacles(scene, avoidDistance) {
     let directionIt = this._generateDirections();
     for (let direction of directionIt) {
-      let raycaster = new THREE.Raycaster(this.position, direction, 0, 3);
+      let raycaster = new THREE.Raycaster(
+        this.position,
+        direction,
+        0,
+        avoidDistance
+      );
       raycaster.layers.set(1);
       let intersects = raycaster.intersectObjects(scene.children);
       if (intersects.length === 0) {
@@ -136,12 +175,12 @@ export default class Boid {
     if (boid.position.distanceToSquared(this.position) > distanceSquared) {
       return false;
     }
-    this.dummyVector.copy(boid.position);
-    let vectorToBoid = this.dummyVector.sub(this.position);
+    let boidPosition = dummyVector.copy(boid.position);
+    let vectorToBoid = boidPosition.sub(this.position);
     vectorToBoid.normalize();
-    this.dummyVector2.copy(this.velocity);
-    this.dummyVector2.normalize();
-    let cosAngle = vectorToBoid.dot(this.dummyVector2);
+    let selfVelocity = dummyVector2.copy(this.velocity);
+    selfVelocity.normalize();
+    let cosAngle = vectorToBoid.dot(selfVelocity);
     return cosAngle > maxCosAngle;
   }
 
@@ -161,12 +200,16 @@ export default class Boid {
     let matrixRot = new THREE.Matrix4();
     matrixRot.makeRotationX(-Math.PI / 2);
     matrix.multiply(matrixRot);
+    let phiOffset = Math.floor(Math.random() * phiSteps);
 
     for (let theta = 1; theta < thetaSteps; theta++) {
       for (let phi = 0; phi < phiSteps; phi++) {
         let direction = new THREE.Vector3(0, 1, 0);
         direction.applyAxisAngle(xVector, theta * thetaStepSize);
-        direction.applyAxisAngle(yVector, phi * phiStepSize);
+        direction.applyAxisAngle(
+          yVector,
+          ((phi + phiOffset) % phiSteps) * phiStepSize
+        );
         direction.applyMatrix4(matrix);
         yield direction;
       }
