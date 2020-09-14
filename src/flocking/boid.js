@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { Matrix4 } from "three";
 
 class BoidParams {
   constructor() {
@@ -40,6 +41,14 @@ const raycaster = new THREE.Raycaster();
 raycaster.near = 0;
 raycaster.far = boidParams.avoidObstacleDistance;
 raycaster.layers.set(1);
+
+const matrix = new THREE.Matrix4();
+const matrixRot = new THREE.Matrix4();
+matrixRot.makeRotationX(-Math.PI / 2);
+const nullVector = new THREE.Vector3(0, 0, 0);
+const upVector = new THREE.Vector3(0, 0, 1);
+const xVector = new THREE.Vector3(1, 0, 0);
+const yVector = new THREE.Vector3(0, 1, 0);
 
 export default class Boid {
   constructor(position, velocity) {
@@ -95,13 +104,13 @@ export default class Boid {
   }
 
   _updateVelocity(force, dt, weight = 1) {
-    this.velocity.add(force.multiplyScalar(dt * weight));
+    this.velocity.addScaledVector(force, dt * weight);
   }
 
   _alignment(boids) {
     let alignmentForce = boids.reduce(
       (direction, boid) => direction.add(boid.velocity),
-      new THREE.Vector3()
+      dummyVector.setScalar(0)
     );
     alignmentForce.divideScalar(boids.length);
     alignmentForce.sub(this.velocity);
@@ -111,7 +120,7 @@ export default class Boid {
   _cohesion(boids) {
     let position = boids.reduce(
       (position, boid) => position.add(boid.position),
-      new THREE.Vector3()
+      dummyVector.setScalar(0)
     );
     position.divideScalar(boids.length);
     let cohesionForce = position.sub(this.position);
@@ -120,13 +129,12 @@ export default class Boid {
   }
 
   _separation(boids) {
-    let separationForce = new THREE.Vector3();
+    let separationForce = dummyVector.setScalar(0);
     boids.forEach((boid) => {
       let distanceSquared = boid.position.distanceToSquared(this.position);
-      let selfPosition = dummyVector.copy(this.position);
+      let selfPosition = dummyVector2.copy(this.position);
       let dir = selfPosition.sub(boid.position);
-      dir.divideScalar(distanceSquared ** 2);
-      separationForce.add(dir);
+      separationForce.addScaledVector(dir, 1 / distanceSquared ** 2);
     });
     separationForce.divideScalar(boids.length);
     separationForce.sub(this.velocity);
@@ -145,7 +153,7 @@ export default class Boid {
       raycaster.set(this.position, direction);
       let intersects = raycaster.intersectObjects(scene.children);
       if (intersects.length === 0) {
-        this.velocity = direction;
+        this.velocity.copy(direction);
         break;
       }
     }
@@ -182,21 +190,14 @@ export default class Boid {
     let thetaSteps = 6;
     let thetaStepSize = Math.PI / thetaSteps;
 
-    let nullVector = new THREE.Vector3(0, 0, 0);
-    let upVector = new THREE.Vector3(0, 0, 1);
-    let xVector = new THREE.Vector3(1, 0, 0);
-    let yVector = new THREE.Vector3(0, 1, 0);
-
-    let matrix = new THREE.Matrix4();
+    matrix.setPosition(nullVector);
     matrix.lookAt(nullVector, this.velocity, upVector);
-    let matrixRot = new THREE.Matrix4();
-    matrixRot.makeRotationX(-Math.PI / 2);
     matrix.multiply(matrixRot);
     let phiOffset = Math.floor(Math.random() * phiSteps);
 
     for (let theta = 1; theta < thetaSteps; theta++) {
       for (let phi = 0; phi < phiSteps; phi++) {
-        let direction = new THREE.Vector3(0, 1, 0);
+        let direction = dummyVector.copy(yVector);
         direction.applyAxisAngle(xVector, theta * thetaStepSize);
         direction.applyAxisAngle(
           yVector,
