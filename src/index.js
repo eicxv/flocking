@@ -1,14 +1,13 @@
-import * as THREE from "three";
 import { initFlock, addBoundary } from "./flocking/setup";
 import Viewport from "./viewport/viewport";
 import Gui from "./gui";
 import "./styles.css";
 
 let dt = 0.1;
-let numberBoids = 200;
+let numberBoids = 500;
 
 function main() {
-  let gui = new Gui();
+  const gui = new Gui();
   const container = document.getElementById("viewport");
   const viewport = new Viewport(container, true);
   const scene = viewport.getScene();
