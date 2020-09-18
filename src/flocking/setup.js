@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import Boid from "./boid";
 import Flock from "./flock";
+import BoidBufferGeometry from "./boidGeometry";
 
 export function initFlock(numberBoids, scene) {
-  let geometry = new THREE.ConeBufferGeometry(0.1, 0.2, 6);
-  geometry.lookAt(new THREE.Vector3(0, 1, 0));
+  let geometry = new BoidBufferGeometry();
+  geometry.scale(0.1, 0.1, 0.1);
   let material = new THREE.MeshBasicMaterial();
   let boids = [...new Array(numberBoids)].map(() => new Boid());
   let flock = new Flock(boids, geometry, material, scene);
@@ -13,7 +14,7 @@ export function initFlock(numberBoids, scene) {
 }
 
 export function addBoundary(scene) {
-  let boundary = new THREE.BoxBufferGeometry(20, 20, 20);
+  let boundary = new THREE.BoxBufferGeometry(40, 40, 40);
   let material = new THREE.MeshBasicMaterial({
     opacity: 0.01,
     transparent: true,
