@@ -1,16 +1,16 @@
 import * as THREE from "three";
-import { Matrix4 } from "three";
 
 class BoidParams {
   constructor() {
-    this.maxVelocity = 1;
+    this.targetVelocity = 1;
+    this.velocityWeight = 10;
     this.separationWeight = 2;
     this.alignmentWeight = 1;
     this.cohesionWeight = 0.5;
-
-    this.attentionAngle = 0.65 * Math.PI;
+    this.separationDistance = 1; // minimum distance before separation
+    this.attentionAngle = 0.65 * Math.PI; // half the angle of the cone of vision
     this.attentionDistance = 2;
-    this.avoidObstacleDistance = 2;
+    this.avoidObstacleDistance = 5;
   }
 
   set attentionDistance(distance) {
@@ -20,6 +20,15 @@ class BoidParams {
 
   get attentionDistance() {
     return this._attentionDistance;
+  }
+
+  set separationDistance(distance) {
+    this._separationDistance = distance;
+    this.separationDistanceSquared = distance ** 2;
+  }
+
+  get separationDistance() {
+    return this._separationDistance;
   }
 
   set attentionAngle(angle) {
@@ -34,8 +43,12 @@ class BoidParams {
 
 export const boidParams = new BoidParams();
 
+// reused objects
 const dummyVector = new THREE.Vector3();
 const dummyVector2 = new THREE.Vector3();
+const dummyVector3 = new THREE.Vector3();
+const dummyVector4 = new THREE.Vector3();
+const dummyVector5 = new THREE.Vector3();
 
 const raycaster = new THREE.Raycaster();
 raycaster.near = 0;
@@ -70,6 +83,22 @@ export default class Boid {
   }
 
   steer(scene, boidsHashMap, dt) {
+    let boidsNearby = this._getNearbyBoids(boidsHashMap);
+    if (boidsNearby.length !== 0) {
+      let flockForce = this._flock(boidsNearby);
+      this.velocity.addScaledVector(flockForce, dt);
+    }
+    if (this._isOnCollisionCourse(scene, this.params.avoidObstacleDistance)) {
+      this._avoidObstacles(scene, this.params.avoidObstacleDistance);
+    }
+    this.velocity.setLength(this.params.targetVelocity);
+  }
+
+  move(dt) {
+    this.position.addScaledVector(this.velocity, dt);
+  }
+
+  _getNearbyBoids(boidsHashMap) {
     let boidsNearby = boidsHashMap.retrieve(
       this.position,
       this.params.attentionDistance
@@ -79,66 +108,35 @@ export default class Boid {
       this.params.attentionDistanceSquared,
       this.params.cosAttentionAngle
     );
-
-    if (boidsNearby.length !== 0) {
-      let steerForce;
-      steerForce = this._alignment(boidsNearby);
-      this._updateVelocity(steerForce, dt, this.params.alignmentWeight);
-      steerForce = this._cohesion(boidsNearby);
-      this._updateVelocity(steerForce, dt, this.params.cohesionWeight);
-      steerForce = this._separation(boidsNearby);
-      this._updateVelocity(steerForce, dt, this.params.separationWeight);
-    }
-
-    if (this._isOnCollisionCourse(scene, this.params.avoidObstacleDistance)) {
-      this._avoidObstacles(scene, this.params.avoidObstacleDistance);
-    }
-
-    this.velocity.normalize();
-    this.velocity.multiplyScalar(this.params.maxVelocity);
+    return boidsNearby;
   }
 
-  move(dt) {
-    let velocity = dummyVector.copy(this.velocity);
-    this.position.add(velocity.multiplyScalar(dt));
-  }
-
-  _updateVelocity(force, dt, weight = 1) {
-    this.velocity.addScaledVector(force, dt * weight);
-  }
-
-  _alignment(boids) {
-    let alignmentForce = boids.reduce(
-      (direction, boid) => direction.add(boid.velocity),
-      dummyVector.setScalar(0)
-    );
-    alignmentForce.divideScalar(boids.length);
-    alignmentForce.sub(this.velocity);
-    return alignmentForce;
-  }
-
-  _cohesion(boids) {
-    let position = boids.reduce(
-      (position, boid) => position.add(boid.position),
-      dummyVector.setScalar(0)
-    );
-    position.divideScalar(boids.length);
-    let cohesionForce = position.sub(this.position);
-    cohesionForce.sub(this.velocity);
-    return cohesionForce;
-  }
-
-  _separation(boids) {
-    let separationForce = dummyVector.setScalar(0);
+  _flock(boids) {
+    let flockForce = dummyVector.setScalar(0);
+    let alignment = dummyVector2.setScalar(0);
+    let cohesion = dummyVector3.setScalar(0);
+    let separation = dummyVector4.setScalar(0);
     boids.forEach((boid) => {
-      let distanceSquared = boid.position.distanceToSquared(this.position);
-      let selfPosition = dummyVector2.copy(this.position);
-      let dir = selfPosition.sub(boid.position);
-      separationForce.addScaledVector(dir, 1 / distanceSquared ** 2);
+      alignment.add(boid.velocity);
+      cohesion.add(boid.position);
+      let distanceToBoidSq = boid.position.distanceToSquared(this.position);
+      if (distanceToBoidSq < this.params.separationDistanceSquared) {
+        let boidToSelf = dummyVector5.copy(this.position);
+        boidToSelf.sub(boid.position);
+        let distanceToBoid = Math.sqrt(distanceToBoidSq);
+        let coeff = 1 - distanceToBoid / this.params.separationDistance;
+        separation.addScaledVector(boidToSelf, coeff);
+        separation.add(boidToSelf);
+      }
     });
-    separationForce.divideScalar(boids.length);
-    separationForce.sub(this.velocity);
-    return separationForce;
+    alignment.divideScalar(boids.length);
+    alignment.sub(this.velocity);
+    cohesion.divideScalar(boids.length);
+    cohesion.sub(this.position);
+    flockForce.addScaledVector(alignment, this.params.alignmentWeight);
+    flockForce.addScaledVector(cohesion, this.params.cohesionWeight);
+    flockForce.addScaledVector(separation, this.params.separationWeight);
+    return flockForce;
   }
 
   _isOnCollisionCourse(scene, avoidDistance) {
