@@ -3,7 +3,9 @@ import SpatialHash from "./spatialHash";
 
 export default class Flock {
   constructor(boids, geometry, material, scene) {
-    this.boids = boids;
+    this.allBoids = boids;
+    this.boids = boids.slice(0);
+    this.count = boids.length;
     this.scene = scene;
 
     this.flockGeometry = new THREE.InstancedMesh(
@@ -11,8 +13,7 @@ export default class Flock {
       material,
       boids.length
     );
-
-    this.spatialHash = new SpatialHash(4, new THREE.Vector3(0, 0, 0), 10);
+    this.spatialHash = new SpatialHash(3, new THREE.Vector3(0, 0, 0), 30);
     console.log(this.spatialHash._hash);
     this.boids.forEach((boid) => {
       this.spatialHash.insert(boid);
@@ -25,6 +26,15 @@ export default class Flock {
 
   getGeometry() {
     return this.flockGeometry;
+  }
+
+  setNumberOfBoids(n) {
+    if (n >= 0 && n <= this.count) {
+      this.flockGeometry.count = n;
+      this.boids = this.allBoids.slice(0, n);
+    } else {
+      throw new Error(`invalid number of boids ${n}`);
+    }
   }
 
   update(dt) {

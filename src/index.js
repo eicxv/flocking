@@ -1,22 +1,19 @@
 import { initFlock, addBoundary } from "./flocking/setup";
 import Viewport from "./viewport/viewport";
-import Gui from "./gui";
+import Gui, { settings } from "./gui";
 import "./styles.css";
 
-let dt = 0.1;
-let numberBoids = 500;
-
 function main() {
-  const gui = new Gui();
   const container = document.getElementById("viewport");
   const viewport = new Viewport(container, true);
   const scene = viewport.getScene();
   addBoundary(scene);
-  const flock = initFlock(numberBoids, scene, dt);
+  const flock = initFlock(settings.numberOfBoids, scene, settings.dt);
+  const gui = new Gui(flock);
 
   function update() {
-    if (gui.obj.run === true) {
-      flock.update(dt);
+    if (settings.run === true) {
+      flock.update(settings.dt);
     }
     viewport.render();
     requestAnimationFrame(update);
